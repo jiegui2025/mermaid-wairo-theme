@@ -1,0 +1,14 @@
+{
+  "name": "mermaid-wairo-theme-tools",
+  "private": true,
+  "description": "Render and check tools for the wairo Mermaid theme",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "gallery": "python3 tools/build_gallery.py",
+    "check": "python3 -m wairo.palette"
+  },
+  "dependencies": {
+    "puppeteer-core": "^24.43.1"
+  }
+}

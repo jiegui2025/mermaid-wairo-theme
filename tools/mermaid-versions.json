@@ -1,0 +1,8 @@
+{
+  "_comment": "Mermaid browser bundles the gallery checks against, pinned by SHA-256. 11.14 stands in for viewers on Mermaid 11 before 11.17 (SharePoint as of 2026-10); 12.1 is what mermaid-cli 12 renders PDFs and images with.",
+  "url": "https://cdn.jsdelivr.net/npm/mermaid@{version}/dist/mermaid.min.js",
+  "versions": {
+    "11.14.0": "217b66ef4279c33c141b4afe22effad10a91c02558dc70917be2c0981e78ed87",
+    "12.1.0": "6484afc32872a3aa16cac9a76ba1816a1ed4cc870a6593cc2e17757750f518b2"
+  }
+}

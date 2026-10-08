@@ -1,0 +1,24 @@
+{
+ "approved": [
+  "classDiagram",
+  "erDiagram",
+  "flowchart",
+  "gantt",
+  "gitGraph",
+  "mindmap",
+  "pie",
+  "quadrantChart",
+  "sequenceDiagram",
+  "stateDiagram-v2",
+  "xychart-beta"
+ ],
+ "mermaid": {
+  "viewer-light": "11.14.0",
+  "viewer-dark": "11.14.0",
+  "print": "12.1.0"
+ },
+ "not_themeable": {
+  "journey": "faces, task borders and section borders are hard-coded greys (#666, #999, #333) in Mermaid's CSS",
+  "timeline": "event boxes are drawn 20% brighter than their section colour by Mermaid's CSS, which shifts every hue; use a gantt with milestones"
+ }
+}
