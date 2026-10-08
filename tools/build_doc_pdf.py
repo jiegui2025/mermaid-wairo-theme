@@ -1,6 +1,8 @@
 """Markdown document with Mermaid -> PDF with every diagram drawn as vectors, styled from the palette.
 
-    python3 tools/build_doc_pdf.py <doc.md> <out.pdf>
+    python3 tools/build_doc_pdf.py <doc.md> <out.pdf> [--compact]
+
+--compact sets tighter type and margins, for one-page handouts.
 
 Diagrams are rendered by mermaid-cli (Mermaid 12) and inlined as SVG. Chrome prints an <img> SVG that holds HTML labels as a
 low-resolution bitmap, so inlining keeps lines and text sharp at any zoom. Needs Node (npx) and a headless Chrome (tools/chrome.py).
@@ -20,11 +22,16 @@ from wairo import palette as P  # noqa: E402  the one source of colour and type
 
 MMDC = '@mermaid-js/mermaid-cli@12.0.0'
 MARKED = 'marked@15.0.12'
-N, C, T = P.NEUTRAL, P.COLOURS, P.TYPE['print']
+N, C = P.NEUTRAL, P.COLOURS
 SANS, MONO = P.font_stack(P.FONT_SANS), P.font_stack(P.FONT_MONO)
 
 
-def build(src, out_pdf):
+def build(src, out_pdf, compact=False):
+    T = dict(P.TYPE['print'])
+    if compact:
+        T.update({'body': 8.6, 'leading': 1.48, 'h1': 16, 'h2': 11.5, 'table': 8, 'small': 7.5})
+    margin = '11mm 13mm 12mm' if compact else '16mm 15mm 17mm'
+    gap = 12 if compact else 22
     md = open(src).read()
     work = tempfile.mkdtemp(prefix='wairo-pdf-')
     blocks = list(re.finditer(r'```mermaid\n(.*?)```', md, re.S))
@@ -46,12 +53,12 @@ def build(src, out_pdf):
     m = re.search(r'^# (.+)$', md, re.M)
     title = m.group(1) if m else os.path.basename(src)
     page = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{html.escape(title)}</title><style>
-@page {{ size: A4; margin: 16mm 15mm 17mm;
+@page {{ size: A4; margin: {margin};
   @bottom-right {{ content: counter(page) " / " counter(pages); font: {T['small']}pt {SANS}; color: {N['muted']}; }}
   @bottom-left {{ content: "{html.escape(title)}"; font: {T['small']}pt {SANS}; color: {N['muted']}; }} }}
 body {{ font-family: {SANS}; font-size: {T['body']}pt; line-height: {T['leading']}; color: {N['ink']}; font-variant-numeric: tabular-nums; }}
 h1 {{ font-size: {T['h1']}pt; font-weight: 600; line-height: 1.3; margin: 0 0 10pt; padding-bottom: 6pt; border-bottom: 2px solid {C['ai'].ink}; }}
-h2 {{ font-size: {T['h2']}pt; font-weight: 600; color: {C['ai'].ink}; margin: 22pt 0 6pt; padding-bottom: 3pt; border-bottom: 1px solid {N['line']}; break-after: avoid; }}
+h2 {{ font-size: {T['h2']}pt; font-weight: 600; color: {C['ai'].ink}; margin: {gap}pt 0 6pt; padding-bottom: 3pt; border-bottom: 1px solid {N['line']}; break-after: avoid; }}
 h3 {{ font-size: {T['h3']}pt; font-weight: 600; color: {C['kon'].ink}; margin: 15pt 0 4pt; break-after: avoid; }}
 h4 {{ font-size: {T['h4']}pt; font-weight: 600; margin: 12pt 0 4pt; break-after: avoid; }}
 p, li {{ margin: 0 0 5pt; }}
@@ -83,6 +90,7 @@ blockquote {{ margin: 6pt 0; padding: 3pt 10pt; border-left: 3px solid {C['hanad
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    if len(args) != 2:
         raise SystemExit(__doc__)
-    build(sys.argv[1], sys.argv[2])
+    build(args[0], args[1], compact='--compact' in sys.argv)

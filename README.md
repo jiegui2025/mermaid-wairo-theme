@@ -128,7 +128,8 @@ Everything else is refused until a sample is added to the gallery and passes.
 npm install                                               # puppeteer-core
 npx @puppeteer/browsers install chrome-headless-shell@stable
 python3 tools/build_gallery.py                            # prove every type; writes wairo/approved.json, gallery/preview.md
-python3 tools/build_doc_pdf.py design.md design.pdf       # Markdown with Mermaid to PDF, diagrams kept as vectors
+python3 tools/build_doc_pdf.py design.md design.pdf       # Markdown with Mermaid to PDF, diagrams kept as vectors (--compact for one-page handouts)
+python3 tools/render_png.py diagram.mmd diagram.png        # 3x PNG for places that can't draw Mermaid or SVG (e.g. Jira); one-line legend drawn underneath
 ```
 
 `tools/fetch_mermaid.py` downloads the pinned Mermaid bundles and verifies their SHA-256 (`tools/mermaid-versions.json`).

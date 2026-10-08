@@ -647,10 +647,11 @@ def _gantt_edge_milestones(src):
         if re.match(r'(title|dateFormat|axisFormat|section|excludes|includes|todayMarker|tickInterval|weekday)\b', name):
             continue
         parts = [t.strip() for t in tags.split(',')]
-        date = next((datetime.date.fromisoformat(t) for t in parts if re.fullmatch(r'\d{4}-\d{2}-\d{2}', t)), None)
+        dates = [datetime.date.fromisoformat(t) for t in parts if re.fullmatch(r'\d{4}-\d{2}-\d{2}', t)]
+        date = dates[0] if dates else None
         dur = next((int(t[:-1]) for t in parts if re.fullmatch(r'\d+d', t)), 0)
         if date:
-            ends.append(date + datetime.timedelta(days=dur))
+            ends.append(dates[1] if len(dates) > 1 else date + datetime.timedelta(days=dur))  # an end date, or start + duration
             if 'milestone' in parts:
                 miles.append((name, date))
     last = max(ends, default=None)
