@@ -9,6 +9,6 @@
     "check": "python3 -m wairo.palette"
   },
   "dependencies": {
-    "puppeteer-core": "^24.43.1"
+    "puppeteer-core": "^25.13.0"
   }
 }
