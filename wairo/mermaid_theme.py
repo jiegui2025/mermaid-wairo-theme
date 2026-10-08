@@ -19,135 +19,161 @@ from collections import defaultdict
 
 from . import palette as P
 
-N, C = P.NEUTRAL, P.COLOURS
-INK, MUTED, EDGE, BORDER, LINE, RULE, PAPER, WHITE = (N[k] for k in ('ink', 'muted', 'edge', 'border', 'line', 'rule', 'paper', 'white'))
 FONT = P.font_stack(P.FONT_SANS, quoted=False)  # unquoted: Mermaid's init parser breaks on any quote
 TY = P.TYPE['diagram']
-
-SERIES_INK = [C[s].ink for s in P.SERIES]
-SERIES_SOFT = [C[s].soft for s in P.SERIES]
+MODE = None  # the mode the colour tables below are built for; every public function sets it
 
 
-def _role(name, dash=None):
-    return {'fill': P.role(name, 'tint'), 'stroke': P.role(name), 'dash': dash, 'color': INK}
-
-
-# One class set, identical in every diagram. Structure stays neutral; colour is for meaning.
-CLASSES = {
-    'plain': {'fill': WHITE, 'stroke': BORDER, 'dash': None, 'color': INK},      # default thing ('node' and 'default' are Mermaid's own names)
-    'ours': _role('ours'),                                                       # our own system, the subject
-    'gen': {'fill': PAPER, 'stroke': BORDER, 'dash': None, 'color': INK},        # generated output, artefacts
-    'ext': {'fill': WHITE, 'stroke': BORDER, 'dash': '4 3', 'color': MUTED},     # external, third party, or not real yet
-    'ok': _role('ok'), 'warn': _role('warn'), 'block': _role('block'), 'info': _role('info'), 'risk': _role('risk'),
-    'new': {'fill': WHITE, 'stroke': P.role('ours'), 'dash': '4 3', 'color': INK},  # proposed, not built yet
-}
-EDGES = {  # linkStyle values for edges that carry meaning; 'flow' is the default arrow
-    'flow': {'stroke': EDGE, 'width': 1.25, 'dash': None, 'color': INK, 'arrow': '-->'},
-    'hard': {'stroke': P.role('block'), 'width': 2.5, 'dash': None, 'color': P.role('block'), 'arrow': '==>'},
-    'planned': {'stroke': P.role('warn'), 'width': 2, 'dash': '6 4', 'color': P.role('warn'), 'arrow': '-.->'},
-    'related': {'stroke': P.role('info'), 'width': 1.5, 'dash': '3 3', 'color': P.role('info'), 'arrow': '-.->'},
-    'optional': {'stroke': C['ginnezumi'].ink, 'width': 1.25, 'dash': '2 4', 'color': MUTED, 'arrow': '-.->'},
-}
-GANTT = {  # task state -> look; the same meanings as the classes
-    'task': {'fill': C['ai'].tint, 'stroke': C['ai'].ink, 'label': 'Planned', 'tags': '', 'words': 'pale indigo'},
-    'active': {'fill': C['ai'].soft, 'stroke': C['ai'].ink, 'label': 'In progress', 'tags': 'active, ', 'words': 'indigo'},
-    'done': {'fill': C['tetsunezumi'].soft, 'stroke': C['tetsunezumi'].ink, 'label': 'Done', 'tags': 'done, ', 'words': 'grey'},
-    'crit': {'fill': C['enji'].tint, 'stroke': C['enji'].ink, 'label': 'Critical path', 'tags': 'crit, ', 'words': 'crimson-edged'},
-    'milestone': {'fill': C['ai'].tint, 'stroke': C['ai'].ink, 'label': 'Milestone', 'tags': 'milestone, ', 'words': 'indigo-edged'},  # Mermaid draws it in the task colours
-}
-# Every diagram is its own white card, so it reads the same on a light or a dark page. SharePoint draws Mermaid with a transparent
-# background, so in dark mode our ink would sit on a dark page. The card also sets the text colour, so anything Mermaid draws in
-# currentColor (labels that inherit, Gantt grid lines) uses our ink, not the page's. Mermaid 11 (SharePoint) honours this. Mermaid 12
-# scopes themeCSS under the diagram and drops it, so render with Mermaid 12 on a white page (tools/ do).
-CARD_CSS = f'&{{background-color:{WHITE};border-radius:6px;color:{INK}}}'
-LEGEND_BOX = {'fill': WHITE, 'stroke': LINE, 'dash': '3 3'}  # the Legend group: white with a dashed hairline, unlike content groups
-LEGEND_POINT = {'fill': WHITE, 'stroke': WHITE}              # invisible ends of the sample lines
+class _Steps:
+    """One palette colour's ink, soft and tint in a given mode."""
+    def __init__(self, colour, mode):
+        self.ink, self.soft, self.tint = (colour.step(s, mode) for s in ('ink', 'soft', 'tint'))
 
 
 def classdef(c):
     s = f"fill:{c['fill']},stroke:{c['stroke']},stroke-width:1.2px,color:{c['color']}"
     return s + (f",stroke-dasharray:{c['dash']}" if c['dash'] else '')
 
-
 def linkstyle(e):
     s = f"stroke:{e['stroke']},stroke-width:{e['width']}px,color:{e['color']}"
     return s + (f",stroke-dasharray:{e['dash']}" if e['dash'] else '')
-
 
 def _series(prefix, values, n, start=0):
     return {f'{prefix}{i + start}': values[i % len(values)] for i in range(n)}
 
 
-VARS = {  # Mermaid theme variables by group; a diagram's init block carries 'common' plus its type's groups
-    'common': {
-        'fontFamily': FONT, 'fontSize': f"{TY['body']}px", 'background': WHITE, 'darkMode': False,
-        'useGradient': False, 'dropShadow': 'none', 'radius': 2, 'strokeWidth': 1,  # engineering look: flat, crisp, near-square
-        'primaryColor': WHITE, 'primaryBorderColor': BORDER, 'primaryTextColor': INK,
-        'secondaryColor': PAPER, 'secondaryBorderColor': LINE, 'secondaryTextColor': INK,
-        'tertiaryColor': WHITE, 'tertiaryBorderColor': LINE, 'tertiaryTextColor': INK,
-        'mainBkg': WHITE, 'textColor': INK, 'titleColor': INK, 'lineColor': EDGE, 'errorBkgColor': C['enji'].tint, 'errorTextColor': C['enji'].ink,
-    },
-    'flow': {
-        'nodeBorder': BORDER, 'nodeTextColor': INK, 'clusterBkg': PAPER, 'clusterBorder': LINE, 'edgeLabelBackground': WHITE,
-        'defaultLinkColor': EDGE, 'arrowheadColor': EDGE, 'labelBackground': WHITE,
-    },
-    'note': {'noteBkgColor': C['kuchiba'].tint, 'noteBorderColor': C['kuchiba'].ink, 'noteTextColor': INK},
-    'sequence': {
-        'actorBkg': C['ai'].tint, 'actorBorder': C['ai'].ink, 'actorTextColor': INK, 'actorLineColor': BORDER,
-        'signalColor': EDGE, 'signalTextColor': INK, 'labelBoxBkgColor': PAPER, 'labelBoxBorderColor': BORDER, 'labelTextColor': INK,
-        'loopTextColor': INK, 'activationBkgColor': PAPER, 'activationBorderColor': BORDER, 'sequenceNumberColor': WHITE,
-    },
-    'gantt': {
-        'sectionBkgColor': PAPER, 'altSectionBkgColor': WHITE, 'sectionBkgColor2': PAPER, 'gridColor': LINE, 'excludeBkgColor': RULE,
-        'taskBkgColor': GANTT['task']['fill'], 'taskBorderColor': GANTT['task']['stroke'],
-        'activeTaskBkgColor': GANTT['active']['fill'], 'activeTaskBorderColor': GANTT['active']['stroke'],
-        'doneTaskBkgColor': GANTT['done']['fill'], 'doneTaskBorderColor': GANTT['done']['stroke'],
-        'critBkgColor': GANTT['crit']['fill'], 'critBorderColor': GANTT['crit']['stroke'],
-        'taskTextColor': INK, 'taskTextLightColor': INK, 'taskTextDarkColor': INK, 'taskTextOutsideColor': INK,
-        'taskTextClickableColor': C['ai'].ink, 'todayLineColor': C['shu'].ink, 'vertLineColor': C['shu'].ink,
-    },
-    'state': {
-        'stateBkg': WHITE, 'stateLabelColor': INK, 'altBackground': PAPER, 'compositeBackground': PAPER, 'compositeBorder': LINE,
-        'compositeTitleBackground': PAPER, 'transitionColor': EDGE, 'transitionLabelColor': INK, 'specialStateColor': EDGE,
-        'innerEndBackground': WHITE, 'labelBackgroundColor': WHITE,
-    },
-    'class': {'classText': INK},
-    'er': {'attributeBackgroundColorOdd': WHITE, 'attributeBackgroundColorEven': PAPER, 'rowOdd': WHITE, 'rowEven': PAPER},
-    'requirement': {
-        'requirementBackground': WHITE, 'requirementBorderColor': BORDER, 'requirementTextColor': INK,
-        'relationColor': EDGE, 'relationLabelBackground': WHITE, 'relationLabelColor': INK,
-    },
-    'arch': {'archEdgeColor': EDGE, 'archEdgeArrowColor': EDGE, 'archGroupBorderColor': LINE},
-    'c4': {'personBkg': C['ai'].tint, 'personBorder': C['ai'].ink},
-    'git': {
-        **_series('git', SERIES_INK, 8), **_series('gitInv', [WHITE], 8), **_series('gitBranchLabel', [WHITE], 8),
-        'commitLabelColor': INK, 'commitLabelBackground': PAPER, 'tagLabelColor': INK, 'tagLabelBackground': C['kuchiba'].tint,
-        'tagLabelBorder': C['kuchiba'].ink,
-    },
-    'pie': {
-        **_series('pie', SERIES_SOFT, 12, start=1), 'pieStrokeColor': WHITE, 'pieStrokeWidth': '2px', 'pieOuterStrokeColor': BORDER,
-        'pieOuterStrokeWidth': '1px', 'pieOpacity': '1', 'pieSectionTextColor': INK, 'pieTitleTextColor': INK, 'pieLegendTextColor': INK,
-        'pieTitleTextSize': f"{TY['title']}px", 'pieSectionTextSize': f"{TY['body']}px", 'pieLegendTextSize': f"{TY['body']}px",
-    },
-    'quadrant': {  # a quiet 藍白 checkerboard, points in 藍
-        'quadrant1Fill': PAPER, 'quadrant2Fill': WHITE, 'quadrant3Fill': PAPER, 'quadrant4Fill': WHITE,
-        'quadrant1TextFill': INK, 'quadrant2TextFill': INK, 'quadrant3TextFill': INK, 'quadrant4TextFill': INK,
-        'quadrantPointFill': C['ai'].ink, 'quadrantPointTextFill': INK, 'quadrantXAxisTextFill': MUTED, 'quadrantYAxisTextFill': MUTED,
-        'quadrantInternalBorderStrokeFill': LINE, 'quadrantExternalBorderStrokeFill': BORDER, 'quadrantTitleFill': INK,
-    },
-    'xy': {'xyChart': {
-        'backgroundColor': WHITE, 'titleColor': INK, 'dataLabelColor': INK, 'legendTextColor': INK,
-        'xAxisTitleColor': INK, 'xAxisLabelColor': MUTED, 'xAxisTickColor': BORDER, 'xAxisLineColor': BORDER,
-        'yAxisTitleColor': INK, 'yAxisLabelColor': MUTED, 'yAxisTickColor': BORDER, 'yAxisLineColor': BORDER,
-        'plotColorPalette': ','.join(SERIES_INK)}},
-    'sections': {  # timeline, mindmap, kanban, treemap, journey, radar: soft areas with ink labels
-        **_series('cScale', SERIES_SOFT, 12), **_series('cScaleLabel', [INK], 12), **_series('cScaleInv', [INK], 12),
-        **_series('cScalePeer', SERIES_INK, 12), **_series('fillType', SERIES_SOFT, 8),
-    },
-    'radar': {'radar': {'axisColor': BORDER, 'graticuleColor': LINE, 'graticuleOpacity': 1, 'curveOpacity': 0.35, 'curveStrokeWidth': 2}},
-    'venn': {**_series('venn', SERIES_SOFT, 8, start=1), 'vennSetTextColor': INK, 'vennTitleTextColor': INK},
-    'root': {'git0': C['ai'].ink, 'gitBranchLabel0': WHITE},  # mindmap root: 藍 with white words
-}
+def _build(mode):
+    """Build every colour table for 'light' or 'dark'. Everything else in this module reads them at call time."""
+    global MODE, BORDER, C, CARD_CSS, CLASSES, EDGE, EDGES, GANTT, INK, LEGEND_BOX, LEGEND_POINT, LINE, MUTED, N, PAPER, RULE, SERIES_INK, SERIES_SOFT, VARS, WHITE
+    MODE = mode
+    N, C = P.neutral(mode), {k: _Steps(c, mode) for k, c in P.COLOURS.items()}
+    INK, MUTED, EDGE, BORDER, LINE, RULE, PAPER, WHITE = (N[k] for k in ('ink', 'muted', 'edge', 'border', 'line', 'rule', 'paper', 'white'))
+
+    SERIES_INK = [C[s].ink for s in P.SERIES]
+    SERIES_SOFT = [C[s].soft for s in P.SERIES]
+
+
+    def _role(name, dash=None):
+        return {'fill': P.role(name, 'tint', mode), 'stroke': P.role(name, 'ink', mode), 'dash': dash, 'color': INK}
+
+
+    # One class set, identical in every diagram. Structure stays neutral; colour is for meaning.
+    CLASSES = {
+        'plain': {'fill': WHITE, 'stroke': BORDER, 'dash': None, 'color': INK},      # default thing ('node' and 'default' are Mermaid's own names)
+        'ours': _role('ours'),                                                       # our own system, the subject
+        'gen': {'fill': PAPER, 'stroke': BORDER, 'dash': None, 'color': INK},        # generated output, artefacts
+        'ext': {'fill': WHITE, 'stroke': BORDER, 'dash': '4 3', 'color': MUTED},     # external, third party, or not real yet
+        'ok': _role('ok'), 'warn': _role('warn'), 'block': _role('block'), 'info': _role('info'), 'risk': _role('risk'),
+        'new': {'fill': WHITE, 'stroke': P.role('ours', 'ink', mode), 'dash': '4 3', 'color': INK},  # proposed, not built yet
+    }
+    EDGES = {  # linkStyle values for edges that carry meaning; 'flow' is the default arrow
+        'flow': {'stroke': EDGE, 'width': 1.25, 'dash': None, 'color': INK, 'arrow': '-->'},
+        'hard': {'stroke': P.role('block', 'ink', mode), 'width': 2.5, 'dash': None, 'color': P.role('block', 'ink', mode), 'arrow': '==>'},
+        'planned': {'stroke': P.role('warn', 'ink', mode), 'width': 2, 'dash': '6 4', 'color': P.role('warn', 'ink', mode), 'arrow': '-.->'},
+        'related': {'stroke': P.role('info', 'ink', mode), 'width': 1.5, 'dash': '3 3', 'color': P.role('info', 'ink', mode), 'arrow': '-.->'},
+        'optional': {'stroke': C['ginnezumi'].ink, 'width': 1.25, 'dash': '2 4', 'color': MUTED, 'arrow': '-.->'},
+    }
+    GANTT = {  # task state -> look; the same meanings as the classes
+        'task': {'fill': C['ai'].tint, 'stroke': C['ai'].ink, 'label': 'Planned', 'tags': '', 'words': 'pale indigo' if mode == 'light' else 'dark indigo'},
+        'active': {'fill': C['ai'].soft, 'stroke': C['ai'].ink, 'label': 'In progress', 'tags': 'active, ', 'words': 'indigo'},
+        'done': {'fill': C['tetsunezumi'].soft, 'stroke': C['tetsunezumi'].ink, 'label': 'Done', 'tags': 'done, ', 'words': 'grey'},
+        'crit': {'fill': C['enji'].tint, 'stroke': C['enji'].ink, 'label': 'Critical path', 'tags': 'crit, ', 'words': 'crimson-edged'},
+        'milestone': {'fill': C['ai'].tint, 'stroke': C['ai'].ink, 'label': 'Milestone', 'tags': 'milestone, ', 'words': 'indigo-edged'},  # Mermaid draws it in the task colours
+    }
+    # Every diagram is its own card (white in light mode, 墨 sumi in dark mode), so it reads the same on any page. SharePoint draws Mermaid with a transparent
+    # background, so in dark mode our ink would sit on a dark page. The card also sets the text colour, so anything Mermaid draws in
+    # currentColor (labels that inherit, Gantt grid lines) uses our ink, not the page's. Mermaid 11 (SharePoint) honours this. Mermaid 12
+    # scopes themeCSS under the diagram and drops it, so render with Mermaid 12 on a white page (tools/ do).
+    CARD_CSS = f'&{{background-color:{WHITE};border-radius:6px;color:{INK}}}'
+    LEGEND_BOX = {'fill': WHITE, 'stroke': LINE, 'dash': '3 3'}  # the Legend group: white with a dashed hairline, unlike content groups
+    LEGEND_POINT = {'fill': WHITE, 'stroke': WHITE}              # invisible ends of the sample lines
+
+
+    VARS = {  # Mermaid theme variables by group; a diagram's init block carries 'common' plus its type's groups
+        'common': {
+            'fontFamily': FONT, 'fontSize': f"{TY['body']}px", 'background': WHITE, 'darkMode': mode == 'dark',
+            'useGradient': False, 'dropShadow': 'none', 'radius': 2, 'strokeWidth': 1,  # engineering look: flat, crisp, near-square
+            'primaryColor': WHITE, 'primaryBorderColor': BORDER, 'primaryTextColor': INK,
+            'secondaryColor': PAPER, 'secondaryBorderColor': LINE, 'secondaryTextColor': INK,
+            'tertiaryColor': WHITE, 'tertiaryBorderColor': LINE, 'tertiaryTextColor': INK,
+            'mainBkg': WHITE, 'textColor': INK, 'titleColor': INK, 'lineColor': EDGE, 'errorBkgColor': C['enji'].tint, 'errorTextColor': C['enji'].ink,
+        },
+        'flow': {
+            'nodeBorder': BORDER, 'nodeTextColor': INK, 'clusterBkg': PAPER, 'clusterBorder': LINE, 'edgeLabelBackground': WHITE,
+            'defaultLinkColor': EDGE, 'arrowheadColor': EDGE, 'labelBackground': WHITE,
+        },
+        'note': {'noteBkgColor': C['kuchiba'].tint, 'noteBorderColor': C['kuchiba'].ink, 'noteTextColor': INK},
+        'sequence': {
+            'actorBkg': C['ai'].tint, 'actorBorder': C['ai'].ink, 'actorTextColor': INK, 'actorLineColor': BORDER,
+            'signalColor': EDGE, 'signalTextColor': INK, 'labelBoxBkgColor': PAPER, 'labelBoxBorderColor': BORDER, 'labelTextColor': INK,
+            'loopTextColor': INK, 'activationBkgColor': PAPER, 'activationBorderColor': BORDER, 'sequenceNumberColor': WHITE,
+        },
+        'gantt': {
+            'sectionBkgColor': PAPER, 'altSectionBkgColor': WHITE, 'sectionBkgColor2': PAPER, 'gridColor': LINE, 'excludeBkgColor': RULE,
+            'taskBkgColor': GANTT['task']['fill'], 'taskBorderColor': GANTT['task']['stroke'],
+            'activeTaskBkgColor': GANTT['active']['fill'], 'activeTaskBorderColor': GANTT['active']['stroke'],
+            'doneTaskBkgColor': GANTT['done']['fill'], 'doneTaskBorderColor': GANTT['done']['stroke'],
+            'critBkgColor': GANTT['crit']['fill'], 'critBorderColor': GANTT['crit']['stroke'],
+            'taskTextColor': INK, 'taskTextLightColor': INK, 'taskTextDarkColor': INK, 'taskTextOutsideColor': INK,
+            'taskTextClickableColor': C['ai'].ink, 'todayLineColor': C['shu'].ink, 'vertLineColor': C['shu'].ink,
+        },
+        'state': {
+            'stateBkg': WHITE, 'stateLabelColor': INK, 'altBackground': PAPER, 'compositeBackground': PAPER, 'compositeBorder': LINE,
+            'compositeTitleBackground': PAPER, 'transitionColor': EDGE, 'transitionLabelColor': INK, 'specialStateColor': EDGE,
+            'innerEndBackground': WHITE, 'labelBackgroundColor': WHITE,
+        },
+        'class': {'classText': INK},
+        'er': {'attributeBackgroundColorOdd': WHITE, 'attributeBackgroundColorEven': PAPER, 'rowOdd': WHITE, 'rowEven': PAPER},
+        'requirement': {
+            'requirementBackground': WHITE, 'requirementBorderColor': BORDER, 'requirementTextColor': INK,
+            'relationColor': EDGE, 'relationLabelBackground': WHITE, 'relationLabelColor': INK,
+        },
+        'arch': {'archEdgeColor': EDGE, 'archEdgeArrowColor': EDGE, 'archGroupBorderColor': LINE},
+        'c4': {'personBkg': C['ai'].tint, 'personBorder': C['ai'].ink},
+        'git': {
+            **_series('git', SERIES_INK, 8), **_series('gitInv', [WHITE], 8), **_series('gitBranchLabel', [WHITE], 8),
+            'commitLabelColor': INK, 'commitLabelBackground': PAPER, 'tagLabelColor': INK, 'tagLabelBackground': C['kuchiba'].tint,
+            'tagLabelBorder': C['kuchiba'].ink,
+        },
+        'pie': {
+            **_series('pie', SERIES_SOFT, 12, start=1), 'pieStrokeColor': WHITE, 'pieStrokeWidth': '2px', 'pieOuterStrokeColor': BORDER,
+            'pieOuterStrokeWidth': '1px', 'pieOpacity': '1', 'pieSectionTextColor': INK, 'pieTitleTextColor': INK, 'pieLegendTextColor': INK,
+            'pieTitleTextSize': f"{TY['title']}px", 'pieSectionTextSize': f"{TY['body']}px", 'pieLegendTextSize': f"{TY['body']}px",
+        },
+        'quadrant': {  # a quiet 藍白 checkerboard, points in 藍
+            'quadrant1Fill': PAPER, 'quadrant2Fill': WHITE, 'quadrant3Fill': PAPER, 'quadrant4Fill': WHITE,
+            'quadrant1TextFill': INK, 'quadrant2TextFill': INK, 'quadrant3TextFill': INK, 'quadrant4TextFill': INK,
+            'quadrantPointFill': C['ai'].ink, 'quadrantPointTextFill': INK, 'quadrantXAxisTextFill': MUTED, 'quadrantYAxisTextFill': MUTED,
+            'quadrantInternalBorderStrokeFill': LINE, 'quadrantExternalBorderStrokeFill': BORDER, 'quadrantTitleFill': INK,
+        },
+        'xy': {'xyChart': {
+            'backgroundColor': WHITE, 'titleColor': INK, 'dataLabelColor': INK, 'legendTextColor': INK,
+            'xAxisTitleColor': INK, 'xAxisLabelColor': MUTED, 'xAxisTickColor': BORDER, 'xAxisLineColor': BORDER,
+            'yAxisTitleColor': INK, 'yAxisLabelColor': MUTED, 'yAxisTickColor': BORDER, 'yAxisLineColor': BORDER,
+            'plotColorPalette': ','.join(SERIES_INK)}},
+        'sections': {  # timeline, mindmap, kanban, treemap, journey, radar: soft areas with ink labels
+            **_series('cScale', SERIES_SOFT, 12), **_series('cScaleLabel', [INK], 12), **_series('cScaleInv', [INK], 12),
+            **_series('cScalePeer', SERIES_INK, 12), **_series('fillType', SERIES_SOFT, 8),
+        },
+        'radar': {'radar': {'axisColor': BORDER, 'graticuleColor': LINE, 'graticuleOpacity': 1, 'curveOpacity': 0.35, 'curveStrokeWidth': 2}},
+        'venn': {**_series('venn', SERIES_SOFT, 8, start=1), 'vennSetTextColor': INK, 'vennTitleTextColor': INK},
+        'root': {'git0': C['ai'].ink, 'gitBranchLabel0': WHITE},  # mindmap root: 藍 with white words
+    }
+
+
+def _use(mode):
+    if mode not in P.MODES:
+        raise ValueError(f'mode must be one of {P.MODES}')
+    if mode != MODE:
+        _build(mode)
+
+
+def _mode_of(src):
+    """The mode a themed diagram was themed for, read from its init block (light when there is none)."""
+    m = re.search(r'%%\{init:\s*(\{.*?\})\s*\}%%', src, re.S)
+    return 'dark' if m and json.loads(m.group(1)).get('themeVariables', {}).get('darkMode') else 'light'
+
+
 TYPE_GROUPS = {
     'flowchart': ['flow'], 'graph': ['flow'], 'sequenceDiagram': ['sequence', 'note'], 'gantt': ['gantt'],
     'stateDiagram-v2': ['flow', 'state', 'note'], 'stateDiagram': ['flow', 'state', 'note'], 'classDiagram': ['flow', 'class', 'note'],
@@ -176,7 +202,8 @@ LAYOUT_TYPE = {'flowchart': ('flowchart', 'graph'), 'sequence': ('sequenceDiagra
 LAYOUT_KEYS = {'flowchart', 'sequence', 'gantt', 'pie', 'quadrantChart', 'xyChart', 'timeline', 'mindmap', 'gitGraph', 'journey',
                'state', 'class', 'er', 'requirement', 'block', 'packet', 'kanban', 'architecture', 'radar', 'treemap', 'sankey', 'c4', 'venn', 'wrap'}
 BUILT_IN_LEGEND = {'pie', 'radar-beta', 'journey'}  # xychart's own legend only exists from Mermaid 11.17, so it gets a caption
-APPROVED = set()  # types whose drawn colours the gallery has proven; set by load_approved(). Empty means not loaded yet.
+_build('light')
+APPROVED = {}  # mode -> types whose drawn colours the gallery has proven; set by load_approved(). Empty means not loaded yet.
 
 
 def theme_variables(kind):
@@ -196,7 +223,8 @@ def diagram_type(src):
     raise ValueError('empty diagram')
 
 
-def init_block(kind, extra=None):
+def init_block(kind, extra=None, mode=None):
+    _use(mode or MODE)
     cfg = {'theme': 'base', 'look': 'classic', 'themeVariables': theme_variables(kind), 'fontFamily': FONT, 'themeCSS': CARD_CSS}
     # Mermaid 12 reads the font from the top level, and its default 'neo' look adds drop shadows
     for k, v in LAYOUT.items():
@@ -489,6 +517,7 @@ def _q(s):
 
 def caption(src):
     """The text legend for a type that cannot draw one inside the diagram; None when the diagram carries its own."""
+    _use(_mode_of(src))
     kind = diagram_type(src)
     if kind in ('flowchart', 'graph') or kind in BUILT_IN_LEGEND:
         return None
@@ -514,7 +543,8 @@ def _colour_word(hexv):
     return 'grey'
 
 
-def theme(src, classmap=None, edges=None):
+def theme(src, classmap=None, edges=None, mode='light'):
+    _use(mode)
     """The diagram with the standard theme, classes, edge styles and legend; content unchanged.
     classmap: old class name -> standard class. edges: {edge index: kind} for edges that carry meaning (indices as in the source)."""
     src, extra = _strip_generated(src)
@@ -544,7 +574,9 @@ APPROVED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'approv
 
 def load_approved(path=APPROVED_FILE):
     APPROVED.clear()
-    APPROVED.update(json.load(open(path))['approved'])
+    approved = json.load(open(path))['approved']
+    approved = approved if isinstance(approved, dict) else {'light': approved}  # older files list light types only
+    APPROVED.update({mode: set(kinds) for mode, kinds in approved.items()})
 
 
 if os.path.exists(APPROVED_FILE):
@@ -553,12 +585,14 @@ if os.path.exists(APPROVED_FILE):
 
 def check(src):
     """Raise ValueError listing every rule the themed source breaks."""
+    _use(_mode_of(src))
     bad = []
     kind = diagram_type(src)
+    mode = _mode_of(src)
     if not APPROVED:
         bad.append('approved types not loaded (load_approved)')
-    elif kind not in APPROVED:
-        bad.append(f'diagram type {kind!r} is not approved; add it to the gallery and prove its colours first')
+    elif kind not in APPROVED.get(mode, set()):
+        bad.append(f'diagram type {kind!r} is not approved for the {mode} theme; add it to the gallery and prove its colours first')
     m = re.search(r'%%\{init:\s*(\{.*?\})\s*\}%%', src, re.S)
     if not m:
         bad.append('no theme init block (run theme())')
@@ -624,14 +658,14 @@ def _gantt_edge_milestones(src):
             for n, d in miles if last and d >= last]
 
 
-def theme_doc(md, plans=None):
+def theme_doc(md, plans=None, mode='light'):
     """Theme every Mermaid block in a Markdown document and put a caption under the ones that need it.
     plans: {block number (1-based): {'classmap': ..., 'edges': ...}}."""
     out, last, n = [], 0, 0
     for m in re.finditer(r'```mermaid\n(.*?)```\n?(?:\*Legend:[^\n]*\*\n)?', md, re.S):
         n += 1
         plan = (plans or {}).get(n, {})
-        src = theme(m.group(1), plan.get('classmap'), plan.get('edges'))
+        src = theme(m.group(1), plan.get('classmap'), plan.get('edges'), mode)
         check(src)
         cap = caption(src)
         out += [md[last:m.start()], '```mermaid\n', src, '```\n', f'*{cap}*\n' if cap else '']

@@ -3,9 +3,10 @@ label, and write the results.
 
     python3 tools/build_gallery.py
 
-Each diagram is drawn three times:
-- viewer-light and viewer-dark: Mermaid 11.14 in a browser on a light and a dark page, as SharePoint, GitHub or a wiki draw it
-- print: Mermaid 12.1 on white, as mermaid-cli renders PDFs and images
+Each diagram is drawn five times:
+- viewer-light and viewer-dark: the light theme in Mermaid 11.14 in a browser on a light and a dark page, as SharePoint, GitHub or a wiki draw it
+- print: the light theme in Mermaid 12.1 on white, as mermaid-cli renders PDFs and images
+- dark-viewer and dark-print: the dark theme (theme(..., mode='dark')) the same two ways, on its 墨 card
 A diagram type is approved only if, in all three, every colour drawn is a palette colour, every label fits inside its box, it
 renders without error, and (in viewers) it sits on its own white card.
 
@@ -30,10 +31,12 @@ from wairo import palette as P  # noqa: E402
 G = os.path.join(ROOT, 'gallery')
 BUILD = os.path.join(ROOT, 'build', 'gallery')
 TOOLS = os.path.join(ROOT, 'tools')
-RUNS = {  # label: (mermaid version, page background, page text colour)
-    'viewer-light': ('11.14.0', '#F8F8F8', '#242424'),
-    'viewer-dark': ('11.14.0', '#1B1A19', '#F3F2F1'),
-    'print': ('12.1.0', P.NEUTRAL['white'], P.NEUTRAL['ink']),
+RUNS = {  # label: (theme mode, mermaid version, page background, page text colour)
+    'viewer-light': ('light', '11.14.0', '#F8F8F8', '#242424'),
+    'viewer-dark': ('light', '11.14.0', '#1B1A19', '#F3F2F1'),     # light theme on a dark page: the white card
+    'print': ('light', '12.1.0', P.NEUTRAL['white'], P.NEUTRAL['ink']),
+    'dark-viewer': ('dark', '11.14.0', '#1B1A19', '#F3F2F1'),       # dark theme on a dark page: the 墨 card
+    'dark-print': ('dark', '12.1.0', P.NEUTRAL_DARK['white'], P.NEUTRAL_DARK['ink']),
 }
 NOT_THEMEABLE = {
     'journey': "faces, task borders and section borders are hard-coded greys (#666, #999, #333) in Mermaid's CSS",
@@ -50,50 +53,58 @@ def node(script, *args, env):
 
 
 P.check()
-T.APPROVED.update(T.TYPE_GROUPS)  # provisional while proving; the checks below decide the real list
-body, n = T.theme_doc(open(os.path.join(G, 'gallery.src.md')).read())
-blocks = re.findall(r'```mermaid\n(.*?)```', body, re.S)
-src_dir = os.path.join(BUILD, 'src')
+T.APPROVED.update({m: set(T.TYPE_GROUPS) for m in P.MODES})  # provisional while proving; the checks below decide the real lists
+source = open(os.path.join(G, 'gallery.src.md')).read()
 shutil.rmtree(BUILD, ignore_errors=True)
-os.makedirs(src_dir)
-for i, b in enumerate(blocks, 1):
-    open(os.path.join(src_dir, f'd{i:02d}.mmd'), 'w').write(b)
-allowed = os.path.join(BUILD, 'allowed.json')
-json.dump(sorted(P.all_hex()), open(allowed, 'w'))
+docs, blocks_by_mode = {}, {}
+for mode in P.MODES:
+    docs[mode], n = T.theme_doc(source, mode=mode)
+    blocks_by_mode[mode] = re.findall(r'```mermaid\n(.*?)```', docs[mode], re.S)
+    os.makedirs(os.path.join(BUILD, 'src', mode))
+    for i, b in enumerate(blocks_by_mode[mode], 1):
+        open(os.path.join(BUILD, 'src', mode, f'd{i:02d}.mmd'), 'w').write(b)
+    json.dump(sorted(P.all_hex(mode)), open(os.path.join(BUILD, f'allowed-{mode}.json'), 'w'))
+body = docs['light']
 
-ok_types, failed = {}, defaultdict(dict)
-for label, (version, bg, fg) in RUNS.items():
+ok_types, failed = {m: set() for m in P.MODES}, {m: defaultdict(dict) for m in P.MODES}
+for label, (mode, version, bg, fg) in RUNS.items():
     out = os.path.join(BUILD, label)
     env = dict(os.environ, PAGE_BG=bg, PAGE_FG=fg)
-    rep = node('mm-render.mjs', fetch(version), out, *sorted(glob.glob(os.path.join(src_dir, '*.mmd'))), env=env)['diagrams']
-    audit = node('audit-colours.mjs', allowed, *sorted(glob.glob(os.path.join(out, '*.svg'))), env=env)
-    for i, b in enumerate(blocks, 1):
+    card = 'rgb({}, {}, {})'.format(*(int(P.neutral(mode)['white'][i:i + 2], 16) for i in (1, 3, 5)))
+    rep = node('mm-render.mjs', fetch(version), out, *sorted(glob.glob(os.path.join(BUILD, 'src', mode, '*.mmd'))), env=env)['diagrams']
+    audit = node('audit-colours.mjs', os.path.join(BUILD, f'allowed-{mode}.json'), *sorted(glob.glob(os.path.join(out, '*.svg'))), env=env)
+    for i, b in enumerate(blocks_by_mode[mode], 1):
         kind, name = T.diagram_type(b), f'd{i:02d}'
         r = rep[name]
         if r.get('error'):
-            failed[kind][f'{label}: render'] = r['error']
+            failed[mode][kind][f'{label}: render'] = r['error']
             continue
-        if label.startswith('viewer') and r.get('background') != 'rgb(255, 255, 255)':
-            failed[kind][f'{label}: background'] = f"{r.get('background')}, not the white card"
+        if 'viewer' in label and r.get('background') != card:
+            failed[mode][kind][f'{label}: background'] = f"{r.get('background')}, not the {mode} card {card}"
         over = [o for o in r['overflows'] if o['by'] > 2]
         if over:
-            failed[kind][f'{label}: text overflow'] = over
+            failed[mode][kind][f'{label}: text overflow'] = over
         if audit.get(f'{name}.svg'):
-            failed[kind][f'{label}: off-palette colours'] = audit[f'{name}.svg']
-        ok_types.setdefault(kind, name)
-approved = sorted(set(ok_types) - set(failed))
-json.dump({'approved': approved, 'mermaid': {k: v[0] for k, v in RUNS.items()}, 'not_themeable': NOT_THEMEABLE},
+            failed[mode][kind][f'{label}: off-palette colours'] = audit[f'{name}.svg']
+        ok_types[mode].add(kind)
+approved_by_mode = {m: sorted(ok_types[m] - set(failed[m])) for m in P.MODES}
+approved = approved_by_mode['light']
+json.dump({'approved': approved_by_mode, 'checked': {k: f'{v[0]} theme, Mermaid {v[1]}' for k, v in RUNS.items()}, 'not_themeable': NOT_THEMEABLE,
+           'dark_refused': {k: dict(v) for k, v in failed['dark'].items()}},
           open(T.APPROVED_FILE, 'w'), indent=1)
-print(f'{n} diagrams, checked as {", ".join(RUNS)}: approved {approved}')
-print('failed:', json.dumps(dict(failed), indent=1) if failed else 'none')
-if failed:
-    raise SystemExit(1)
+print(f'{n} diagrams, checked as {", ".join(RUNS)}')
+for m in P.MODES:
+    print(f'  {m} theme approved: {approved_by_mode[m]}')
+    if failed[m]:
+        print(f'  {m} theme refused:', json.dumps({k: dict(v) for k, v in failed[m].items()}, indent=1))
+if failed['light']:
+    raise SystemExit(1)  # the light theme must prove every sample; the dark theme may refuse a type, with the reason recorded
 
 img = os.path.join(ROOT, 'docs', 'images')
 os.makedirs(img, exist_ok=True)
 for name, what in README_FIGURES.items():
-    for mode in ('light', 'dark'):
-        shutil.copyfile(os.path.join(BUILD, f'viewer-{mode}', f'{name}.png'), os.path.join(img, f'{what}-{mode}.png'))
+    for run, suffix in (('viewer-light', 'light'), ('viewer-dark', 'dark'), ('dark-viewer', 'dark-theme')):
+        shutil.copyfile(os.path.join(BUILD, run, f'{name}.png'), os.path.join(img, f'{what}-{suffix}.png'))
 
 
 # ---------------------------------------------------------------- the gallery page
@@ -110,8 +121,8 @@ diagrams = re.sub(r'^# .*\n\n.*\n', '', body, count=1).strip()
 page = f"""# Wairo theme gallery
 
 Generated by `tools/build_gallery.py` from `gallery/gallery.src.md`. Every diagram below carries the theme in its own source,
-so any Mermaid viewer draws it the same way. Each type here passed every check in Mermaid {RUNS['viewer-light'][0]} on a light
-page and a dark page, and in Mermaid {RUNS['print'][0]} for print: every colour drawn is a palette colour, every label fits
+so any Mermaid viewer draws it the same way. Each type here passed every check in Mermaid {RUNS['viewer-light'][1]} on a light
+page and a dark page, and in Mermaid {RUNS['print'][1]} for print, in both the light and the dark theme: every colour drawn is a palette colour, every label fits
 inside its box, and the diagram sits on its own white card.
 
 ## Palette

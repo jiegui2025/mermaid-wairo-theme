@@ -7,10 +7,15 @@ Tone: 和色, traditional Japanese colours, calmed for documentation. Each colou
 capped (OKLCH C <= 0.14, most <= 0.10) and its lightness set so it reads as text on white.
 Engineering tint: the structure reads like a Japanese engineering drawing. Paper is 藍白 (aijiro, the palest indigo dye),
 borders are 藍鼠 (ainezumi, indigo grey), connectors are iron grey, text is a cool 墨 ink, and greys lean faintly cool.
-Every colour has three steps:
-- ink:  lines, borders, section titles and labels. At least 4.5:1 on white (縹 and 銀鼠 at least 3.3:1, large titles only).
+Every colour has three steps, in a light set and a dark set:
+- ink:  lines, borders, section titles and labels. At least 4.5:1 on the card (縹 and 銀鼠 at least 3.3:1, large titles only).
+        The dark inks are hue-lifted: same traditional hue, lighter, so they read on a dark card.
 - soft: chart areas (pie slices, bars, timeline and mindmap sections) with ink text on top, at least 7:1.
-- tint: node and panel fills with ink text, at least 12:1.
+- tint: node and panel fills with ink text, at least 12:1 (light) or 11:1 (dark).
+
+The greys are generated, not picked: every neutral is the ink mixed into the paper at a fixed share (OKLCH lightness and hue),
+plus a small chroma bump that peaks in the mid-greys and keeps the 藍鼠 indigo cast (TINT). Swapping the two anchors for
+the dark ones gives the dark greys from the same rule.
 
 Colour carries meaning only. A meaning (ROLE, SECTION, SERIES) names a colour; nothing names a hex.
 
@@ -34,21 +39,39 @@ class Colour:
     ink: str
     soft: str
     tint: str
+    dark_ink: str = ''
+    dark_soft: str = ''
+    dark_tint: str = ''
+
+    def step(self, step='ink', mode='light'):
+        return getattr(self, step if mode == 'light' else f'dark_{step}')
 
 
 COLOURS = {
-    'ai': Colour('藍', 'ai', '#165E83', ink='#1B5C7E', soft='#BBD5E7', tint='#E8F5FD'),                       # indigo
-    'kon': Colour('紺', 'kon', '#223A70', ink='#233C68', soft='#C3D2EA', tint='#ECF3FF'),                     # deep navy
-    'hanada': Colour('縹', 'hanada', '#2792C3', ink='#357E9C', soft='#B9D6E4', tint='#E7F5FC'),               # light indigo
-    'seiheki': Colour('青碧', 'seiheki', '#478384', ink='#07635D', soft='#B6D9D5', tint='#E6F7F5'),           # blue-green
-    'tokiwa': Colour('常磐', 'tokiwa', '#007B43', ink='#3F7B4A', soft='#C1D8C4', tint='#EBF6EC'),             # evergreen
-    'kuchiba': Colour('朽葉', 'kuchiba', '#917347', ink='#826235', soft='#E0CEB7', tint='#FAF1E6'),           # fallen-leaf ochre
-    'enji': Colour('臙脂', 'enji', '#B94047', ink='#94373D', soft='#E9C8C7', tint='#FFEEED'),                 # cochineal red
-    'shu': Colour('朱', 'shu', '#EB6101', ink='#B85725', soft='#E7CABD', tint='#FEEFE9'),                     # vermilion
-    'edomurasaki': Colour('江戸紫', 'edomurasaki', '#745399', ink='#755A9A', soft='#D5CCE6', tint='#F4F0FD'), # Edo purple
-    'umemurasaki': Colour('梅紫', 'umemurasaki', '#A8497A', ink='#A55D81', soft='#E5C8D5', tint='#FDEEF4'),   # plum
-    'tetsunezumi': Colour('鉄鼠', 'tetsunezumi', '#43474E', ink='#47494B', soft='#CED1D3', tint='#F0F3F5'),  # iron grey
-    'ginnezumi': Colour('銀鼠', 'ginnezumi', '#91989F', ink='#7E8182', soft='#CED1D3', tint='#F0F3F5'),      # silver grey
+    'ai': Colour('藍', 'ai', '#165E83', ink='#1B5C7E', soft='#BBD5E7', tint='#E8F5FD',
+                  dark_ink='#66B4E2', dark_soft='#294C61', dark_tint='#192E3B'),                       # indigo
+    'kon': Colour('紺', 'kon', '#223A70', ink='#233C68', soft='#C3D2EA', tint='#ECF3FF',
+                  dark_ink='#A6C5FA', dark_soft='#374865', dark_tint='#212C3D'),                     # deep navy
+    'hanada': Colour('縹', 'hanada', '#2792C3', ink='#357E9C', soft='#B9D6E4', tint='#E7F5FC',
+                  dark_ink='#4797B8', dark_soft='#254D5F', dark_tint='#172F39'),               # light indigo
+    'seiheki': Colour('青碧', 'seiheki', '#478384', ink='#07635D', soft='#B6D9D5', tint='#E6F7F5',
+                  dark_ink='#4EBFB5', dark_soft='#1F514D', dark_tint='#14312E'),           # blue-green
+    'tokiwa': Colour('常磐', 'tokiwa', '#007B43', ink='#3F7B4A', soft='#C1D8C4', tint='#EBF6EC',
+                  dark_ink='#5CA869', dark_soft='#335037', dark_tint='#1F3021'),             # evergreen
+    'kuchiba': Colour('朽葉', 'kuchiba', '#917347', ink='#826235', soft='#E0CEB7', tint='#FAF1E6',
+                  dark_ink='#B39163', dark_soft='#594325', dark_tint='#362917'),           # fallen-leaf ochre
+    'enji': Colour('臙脂', 'enji', '#B94047', ink='#94373D', soft='#E9C8C7', tint='#FFEEED',
+                  dark_ink='#EB8184', dark_soft='#623C3C', dark_tint='#3B2424'),                 # cochineal red
+    'shu': Colour('朱', 'shu', '#EB6101', ink='#B85725', soft='#E7CABD', tint='#FEEFE9',
+                  dark_ink='#CB7044', dark_soft='#603E2F', dark_tint='#3A261D'),                     # vermilion
+    'edomurasaki': Colour('江戸紫', 'edomurasaki', '#745399', ink='#755A9A', soft='#D5CCE6', tint='#F4F0FD',
+                  dark_ink='#A287CA', dark_soft='#4D4160', dark_tint='#2F273A'), # Edo purple
+    'umemurasaki': Colour('梅紫', 'umemurasaki', '#A8497A', ink='#A55D81', soft='#E5C8D5', tint='#FDEEF4',
+                  dark_ink='#BE7096', dark_soft='#5E3B4C', dark_tint='#39242E'),   # plum
+    'tetsunezumi': Colour('鉄鼠', 'tetsunezumi', '#43474E', ink='#47494B', soft='#CED1D3', tint='#F0F3F5',
+                  dark_ink='#B5B7BA', dark_soft='#46484A', dark_tint='#2A2B2D'),  # iron grey
+    'ginnezumi': Colour('銀鼠', 'ginnezumi', '#91989F', ink='#7E8182', soft='#CED1D3', tint='#F0F3F5',
+                  dark_ink='#848788', dark_soft='#464849', dark_tint='#2A2C2C'),      # silver grey
 }
 
 ENGLISH = {  # plain-English colour words for text legends
@@ -56,16 +79,35 @@ ENGLISH = {  # plain-English colour words for text legends
     'enji': 'crimson', 'shu': 'vermilion', 'edomurasaki': 'purple', 'umemurasaki': 'plum', 'tetsunezumi': 'iron grey', 'ginnezumi': 'silver grey',
 }
 
-NEUTRAL = {  # engineering tint: cool 墨 ink and iron-grey linework on 藍白 paper
-    'ink': '#20282B',     # body text, node labels (15.0:1 on white)
-    'muted': '#505D63',   # secondary text, axis labels, external things (6.8:1)
-    'edge': '#3C4A50',    # connectors and arrows, iron grey (9.2:1)
-    'border': '#6B7E86',  # 藍鼠 ainezumi: default node borders (4.2:1 on white, 4.0:1 on paper)
-    'line': '#D0D9DD',    # hairlines: cluster borders, grid, table rules (decorative, never the only cue)
-    'rule': '#E4EBEE',    # faint rules: alternate rows, quiet separators
-    'paper': '#F2F8FA',   # 藍白 aijiro: groups, table headers, page panels
-    'white': '#FFFFFF',   # nodes and page
+ANCHORS = {  # the only picked neutrals: the card, the paper and the ink; every other grey is generated from paper and ink
+    'light': {'white': '#FFFFFF', 'paper': '#F2F8FA', 'ink': '#20282B'},   # white card, 藍白 aijiro paper, cool 墨 ink
+    'dark': {'white': '#161A1C', 'paper': '#1D2325', 'ink': '#E2E9EC'},    # 墨 sumi card, a step lighter paper, pale ink
 }
+SHARES = {  # how much ink goes into the paper for each generated grey
+    'rule': 0.06,     # faint rules: alternate rows, quiet separators
+    'line': 0.14,     # hairlines: cluster borders, grid, table rules (decorative, never the only cue)
+    'border': 0.56,   # 藍鼠 ainezumi: default node borders (at least 3:1)
+    'muted': 0.72,    # secondary text, axis labels, external things
+    'edge': 0.82,     # connectors and arrows, iron grey
+}
+TINT = 0.013  # extra OKLCH chroma at the middle of the paper-to-ink range, so mid-greys keep the indigo cast
+
+
+def _grey(share, paper, ink_):
+    import math
+    from .colour import from_oklch
+    (Lp, Cp, Hp), (Li, Ci, Hi) = oklch(paper), oklch(ink_)
+    dh = ((Hi - Hp + 180) % 360) - 180
+    return from_oklch(Lp + (Li - Lp) * share, Cp + (Ci - Cp) * share + TINT * math.sin(math.pi * share), (Hp + dh * share) % 360)
+
+
+def neutrals(mode='light'):
+    a = ANCHORS[mode]
+    return {'ink': a['ink'], **{k: _grey(s, a['paper'], a['ink']) for k, s in SHARES.items()}, 'paper': a['paper'], 'white': a['white']}
+
+
+NEUTRAL = neutrals('light')
+NEUTRAL_DARK = neutrals('dark')
 BORDER = NEUTRAL['border']
 
 # Meanings. A diagram class or edge, a document section, a chart series names one of the colours above.
@@ -123,60 +165,72 @@ MIN_INK, MIN_TITLE, MIN_SOFT_TEXT, MIN_TINT_TEXT, MIN_BORDER = 4.5, 3.3, 7.0, 12
 MIN_APART, MIN_SIBLING, MAX_CHROMA = 25, 12, 0.145
 
 
-def ink(name):
-    return COLOURS[name].ink
+MIN_TINT_TEXT_DARK = 11.0
+MODES = ('light', 'dark')
 
 
-def soft(name):
-    return COLOURS[name].soft
+def ink(name, mode='light'):
+    return COLOURS[name].step('ink', mode)
 
 
-def tint(name):
-    return COLOURS[name].tint
+def soft(name, mode='light'):
+    return COLOURS[name].step('soft', mode)
 
 
-def role(name, step='ink'):
-    return getattr(COLOURS[ROLE[name]], step)
+def tint(name, mode='light'):
+    return COLOURS[name].step('tint', mode)
 
 
-def all_hex():
-    """Every colour a published artefact may contain."""
-    out = set(NEUTRAL.values()) | {BORDER}
+def role(name, step='ink', mode='light'):
+    return COLOURS[ROLE[name]].step(step, mode)
+
+
+def neutral(mode='light'):
+    return NEUTRAL if mode == 'light' else NEUTRAL_DARK
+
+
+def all_hex(mode='light'):
+    """Every colour a published artefact in this mode may contain."""
+    out = set(neutral(mode).values())
     for c in COLOURS.values():
-        out |= {c.ink, c.soft, c.tint}
+        out |= {c.step(s, mode) for s in ('ink', 'soft', 'tint')}
     return {h.upper() for h in out}
 
 
 def check():
-    """Prove the rules; raise with every failure listed."""
+    """Prove the rules in both modes; raise with every failure listed."""
     bad = []
-    for k, c in COLOURS.items():
-        large_only = k in ('ginnezumi', 'hanada')
-        need = MIN_TITLE if large_only else MIN_INK
-        if contrast(c.ink) < need:
-            bad.append(f'{k} ink {c.ink} {contrast(c.ink):.1f}:1 on white < {need}')
-        if contrast(NEUTRAL['ink'], c.soft) < MIN_SOFT_TEXT:
-            bad.append(f'{k} soft {c.soft}: ink text {contrast(NEUTRAL["ink"], c.soft):.1f}:1 < {MIN_SOFT_TEXT}')
-        if contrast(NEUTRAL['ink'], c.tint) < MIN_TINT_TEXT:
-            bad.append(f'{k} tint {c.tint}: ink text {contrast(NEUTRAL["ink"], c.tint):.1f}:1 < {MIN_TINT_TEXT}')
-        if oklch(c.ink)[1] > MAX_CHROMA:
-            bad.append(f'{k} ink {c.ink} chroma {oklch(c.ink)[1]:.3f} > {MAX_CHROMA} (not calm)')
-    for a, b in itertools.combinations(COLOURS, 2):
-        d = delta_e(COLOURS[a].ink, COLOURS[b].ink)
-        sib = any({a, b} <= s for s in SIBLINGS)
-        if d < (MIN_SIBLING if sib else MIN_APART):
-            bad.append(f'{a}/{b} ΔE {d:.0f} < {MIN_SIBLING if sib else MIN_APART}')
-    for name in ('ink', 'muted', 'edge'):
-        for bg in ('white', 'paper'):
-            if contrast(NEUTRAL[name], NEUTRAL[bg]) < MIN_INK:
-                bad.append(f'{name} on {bg} {contrast(NEUTRAL[name], NEUTRAL[bg]):.1f}:1')
-    if contrast(BORDER) < MIN_BORDER or contrast(BORDER, NEUTRAL['paper']) < MIN_BORDER:
-        bad.append(f'border {BORDER} under 3:1')
+    for mode in MODES:
+        N = neutral(mode)
+        card, paper, text = N['white'], N['paper'], N['ink']
+        min_tint = MIN_TINT_TEXT if mode == 'light' else MIN_TINT_TEXT_DARK
+        for k, c in COLOURS.items():
+            i, s, t = (c.step(x, mode) for x in ('ink', 'soft', 'tint'))
+            need = MIN_TITLE if k in ('ginnezumi', 'hanada') else MIN_INK
+            if contrast(i, card) < need:
+                bad.append(f'{mode} {k} ink {i} {contrast(i, card):.1f}:1 on the card < {need}')
+            if contrast(text, s) < MIN_SOFT_TEXT:
+                bad.append(f'{mode} {k} soft {s}: text {contrast(text, s):.1f}:1 < {MIN_SOFT_TEXT}')
+            if contrast(text, t) < min_tint:
+                bad.append(f'{mode} {k} tint {t}: text {contrast(text, t):.1f}:1 < {min_tint}')
+            if oklch(i)[1] > MAX_CHROMA:
+                bad.append(f'{mode} {k} ink {i} chroma {oklch(i)[1]:.3f} > {MAX_CHROMA} (not calm)')
+        for a, b in itertools.combinations(COLOURS, 2):
+            d = delta_e(ink(a, mode), ink(b, mode))
+            sib = any({a, b} <= s for s in SIBLINGS)
+            if d < (MIN_SIBLING if sib else MIN_APART):
+                bad.append(f'{mode} {a}/{b} ΔE {d:.0f} < {MIN_SIBLING if sib else MIN_APART}')
+        for name in ('ink', 'muted', 'edge'):
+            for bg in ('white', 'paper'):
+                if contrast(N[name], N[bg]) < MIN_INK:
+                    bad.append(f'{mode} {name} on {bg} {contrast(N[name], N[bg]):.1f}:1')
+        if contrast(N['border'], card) < MIN_BORDER or contrast(N['border'], paper) < MIN_BORDER:
+            bad.append(f"{mode} border {N['border']} under 3:1")
+        for a, b in zip(SERIES, SERIES[1:]):
+            if delta_e(soft(a, mode), soft(b, mode)) < 10:
+                bad.append(f'{mode} SERIES neighbours {a}/{b} too close as areas')
     for table, names in (('ROLE', ROLE.values()), ('SECTION', SECTION.values()), ('SERIES', SERIES), ('EDGE_ROLE', [ROLE[x] for x in EDGE_ROLE.values()])):
         bad += [f'{table} names unknown colour {n}' for n in names if n not in COLOURS]
-    for a, b in zip(SERIES, SERIES[1:]):
-        if delta_e(soft(a), soft(b)) < 10:
-            bad.append(f'SERIES neighbours {a}/{b} too close as areas')
     if bad:
         raise SystemExit('palette check failed:\n  ' + '\n  '.join(bad))
     return True
@@ -186,5 +240,7 @@ if __name__ == '__main__':
     check()
     print('palette check passed')
     for k, c in COLOURS.items():
-        print(f'{c.kanji:4}{c.romaji:12} ink {c.ink} ({contrast(c.ink):4.1f}:1)  soft {c.soft}  tint {c.tint}  '
+        print(f'{c.kanji:4}{c.romaji:12} light {c.ink} {c.soft} {c.tint}  dark {c.dark_ink} {c.dark_soft} {c.dark_tint}  '
               f'uses: {", ".join([r for r, v in ROLE.items() if v == k] + [s for s, v in SECTION.items() if v == k])}')
+    for mode in MODES:
+        print(mode, 'greys:', neutral(mode))

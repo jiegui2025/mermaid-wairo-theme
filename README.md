@@ -4,10 +4,10 @@ A calm, Japanese-colour theme for [Mermaid](https://mermaid.js.org) diagrams in 
 only, every diagram gets a legend, and a strict check refuses anything that breaks the rules. Each chart type is proven
 in the Mermaid versions readers actually get.
 
-| Light page | Dark page |
-|---|---|
-| ![Flowchart on a light page](docs/images/flowchart-light.png) | ![Flowchart on a dark page](docs/images/flowchart-dark.png) |
-| ![Gantt chart on a light page](docs/images/gantt-light.png) | ![Gantt chart on a dark page](docs/images/gantt-dark.png) |
+| Light theme, light page | Light theme, dark page | Dark theme |
+|---|---|---|
+| ![Flowchart, light theme on a light page](docs/images/flowchart-light.png) | ![Flowchart, light theme on a dark page](docs/images/flowchart-dark.png) | ![Flowchart, dark theme](docs/images/flowchart-dark-theme.png) |
+| ![Pie chart, light theme on a light page](docs/images/pie-light.png) | ![Pie chart, light theme on a dark page](docs/images/pie-dark.png) | ![Pie chart, dark theme](docs/images/pie-dark-theme.png) |
 
 See every supported type, drawn live by GitHub, in [gallery/preview.md](gallery/preview.md).
 
@@ -23,9 +23,11 @@ in every diagram, a reader has to be able to decode it, and the result has to su
 - **Meaning only.** A fixed set of classes and edge kinds, the same in every diagram.
 - **Legends, small.** A flowchart gets a key box in its bottom corner. A pie chart keeps its own legend. Every other type
   gets a one-line legend under the diagram.
-- **Dark mode.** Every diagram is its own white card with ink text, so it reads the same on a light or a dark page.
-- **Proof, not hope.** `tools/build_gallery.py` draws every sample in Mermaid 11.14 (light and dark page) and 12.1 (print),
-  and approves a type only if every colour drawn is a palette colour and every label fits its box.
+- **Dark mode, two ways.** In the light theme every diagram is its own white card with ink text, so it reads the same on a
+  light or a dark page. For dark-only pages and decks there is a dark theme (`mode='dark'`): a 墨 *sumi* card with
+  hue-lifted inks, the same hues made lighter so they read on dark, carrying the same meanings.
+- **Proof, not hope.** `tools/build_gallery.py` draws every sample in both themes, in Mermaid 11.14 (light and dark page)
+  and 12.1 (print). It approves a type for a theme only if every colour drawn is a palette colour and every label fits its box.
 
 ## Quick start
 
@@ -43,8 +45,10 @@ src = T.theme('''flowchart TD
 T.check(src)    # raises with every rule the diagram breaks
 print(src)      # paste into any Mermaid viewer
 
+dark = T.theme(src, mode='dark')   # the dark theme; check() reads the mode from the diagram
+
 # or theme every ```mermaid block in a document; adds the one-line legends too
-md, count = T.theme_doc(open('design.md').read())
+md, count = T.theme_doc(open('design.md').read())   # mode='dark' for a dark document
 ```
 
 `theme()` keeps your content. It adds the init block, the standard `classDef`s, `linkStyle`s for edges that carry meaning
@@ -84,12 +88,17 @@ milestone on the chart's last day, because Mermaid then draws the label across t
 
 ## Rules the palette proves
 
-`python3 -m wairo.palette` runs these checks:
+`python3 -m wairo.palette` runs these checks, for the light set and the dark set:
 
 - Ink (lines, titles, labels) reads at least 4.5:1 on white. Two large-title colours reach 3.3:1.
 - Ink text on a tint reads at least 12:1, and on a soft area at least 7:1. Borders reach at least 3:1.
 - Colours that aren't siblings are at least ΔE 25 apart (CIE76). Siblings are at least 12 apart.
 - Chroma is capped (OKLCH C ≤ 0.145), so the palette stays calm.
+
+The greys are generated, not picked. Each theme has three anchors: the card, the paper (藍白 in light, a step above 墨 in
+dark) and the ink. Every other grey mixes the ink into the paper at a fixed share: 6% rule, 14% line, 56% border, 72%
+muted text, 82% connectors. A small chroma bump in the mid-greys keeps the 藍鼠 indigo cast. Swap the anchors and the
+same rule gives the dark greys.
 
 The full table, with every value, is in [gallery/preview.md](gallery/preview.md).
 
@@ -108,9 +117,10 @@ Windows, and Hiragino Sans and Menlo on macOS. Install Noto Sans JP if you want 
 | PDFs and images | 12.1 via mermaid-cli 12 | Mermaid 12 drops custom CSS, so render on a white page (the tools do). |
 | GitHub | its bundled Mermaid | Palette, classes and legends all apply (checked 2026-10-08). GitHub drops the custom CSS, so there is no white card: fine on a light page, but in GitHub's dark mode the diagram sits on the dark page. |
 
-Approved types: flowchart, sequence, Gantt, state, class, ER, pie, quadrant, XY chart, mindmap and git graph. Refused,
-because Mermaid hard-codes colours no theme setting reaches: journey and timeline (use a Gantt with milestones). Everything
-else is refused until a sample is added to the gallery and passes.
+Approved types: flowchart, sequence, Gantt, state, class, ER, pie, quadrant, XY chart, mindmap and git graph. The dark
+theme approves all of them except ER diagrams, because Mermaid hard-codes white on their "zero" markers. Refused in both
+themes, because Mermaid hard-codes colours no theme setting reaches: journey and timeline (use a Gantt with milestones).
+Everything else is refused until a sample is added to the gallery and passes.
 
 ## Tools
 
@@ -128,8 +138,8 @@ Set `CHROME_PATH` to use a different Chrome.
 
 - Colour names and traditional values: the 和色 tradition. The theme's values are calmed versions of them.
 - Typography: the Japanese Digital Agency design system.
-- Ideas: an explicit diagram canvas for dark pages, from [Beauty Diagram](https://github.com/beauty-diagram/vscode-beauty-diagram);
-  two-colour derivation for themes, from [beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid).
+- Ideas: an explicit diagram canvas and hue-lifted ink for dark pages, from [Beauty Diagram](https://github.com/beauty-diagram/vscode-beauty-diagram);
+  generating every grey from two colours, from [beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid).
 - [Mermaid](https://github.com/mermaid-js/mermaid), MIT.
 
 ## Licence
