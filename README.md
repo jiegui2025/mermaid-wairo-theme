@@ -106,6 +106,7 @@ Windows, and Hiragino Sans and Menlo on macOS. Install Noto Sans JP if you want 
 |---|---|---|
 | SharePoint and other viewers on Mermaid 11 | 11.x (checked on 11.14) | White card in dark mode. Before 11.17, XY charts draw no legend of their own, so they get the one-line legend. |
 | PDFs and images | 12.1 via mermaid-cli 12 | Mermaid 12 drops custom CSS, so render on a white page (the tools do). |
+| GitHub | its bundled Mermaid | Palette, classes and legends all apply (checked 2026-10-08). GitHub drops the custom CSS, so there is no white card: fine on a light page, but in GitHub's dark mode the diagram sits on the dark page. |
 
 Approved types: flowchart, sequence, Gantt, state, class, ER, pie, quadrant, XY chart, mindmap and git graph. Refused,
 because Mermaid hard-codes colours no theme setting reaches: journey and timeline (use a Gantt with milestones). Everything
